@@ -1,7 +1,7 @@
 import { Dataframe } from "./Dataframe";
-import { from, product } from "./Factor";
-import { fetchJSON } from "./funs";
+import { add, fetchJSON, zero } from "./funs";
 import "./style.css";
+import { INDICATOR } from "./symbols";
 
 const mpgJSON = await fetchJSON("./data/mpg.json");
 
@@ -12,33 +12,18 @@ let data = Dataframe.parseColumns(mpgJSON, {
   manufacturer: "discrete",
 });
 
-const zero = () => 0;
-const one = () => 1;
-const empty = () => "";
-function add(x: number, y: number) {
-  return x + y;
-}
-
-function longest(x: string, y: string) {
-  return y.length > x.length ? y : x;
-}
-
-const f1 = () => from(data.col("cyl").array);
-const f2 = () => from(data.col("manufacturer").array);
-const f3 = () => product(f1(), f2());
-
-console.log(data.col("cyl").values());
+const f1 = () => data.col("cyl").asFactor();
+const f2 = () => f1().nest(data.col("manufacturer").asFactor());
 
 const data2 = data
-  .summarize("cyl", "stat1", empty, longest)
+  .summarize(INDICATOR, "stat1", zero, add)
   .summarize("hwy", "stat2", zero, add);
 
-const data3 = data2.partitionBy(f3);
+const partitions = data2.makePartitions([f1, f2] as const);
 
-const partitions = data2.makePartitions([f1, f2, f3] as const);
+const p = partitions[1]();
 
-const p = partitions[2]();
-
+console.log(p.rows());
 // const body = document.querySelector("body")!;
 
 // const canvas = document.createElement("canvas");

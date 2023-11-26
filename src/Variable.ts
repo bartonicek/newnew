@@ -1,11 +1,12 @@
 import { Lazy, ReduceFn, asString } from "@abartonicek/utilities";
+import { from } from "./Factor";
 import {
   Metadata,
   NoopMetadata,
   NumericMetadata,
   StringMetadata,
 } from "./Metadata";
-import { Summarizer } from "./Summarizer";
+import { Reducer } from "./Summarizer";
 
 export class Variable<T> {
   private _name?: string;
@@ -54,8 +55,8 @@ export class Variable<T> {
     return this.array[position];
   }
 
-  summarize<U>(initialize: Lazy<U>, update: ReduceFn<T, U>): Summarizer<T, U> {
-    return Summarizer.of(this, initialize, update);
+  summarize<U>(initialize: Lazy<U>, update: ReduceFn<T, U>): Reducer<T, U> {
+    return Reducer.of(this, initialize, update);
   }
 }
 
@@ -83,6 +84,10 @@ export class StringVariable extends Variable<string> {
 
   static of(array: string[]) {
     return new StringVariable(array);
+  }
+
+  asFactor() {
+    return from(this);
   }
 }
 

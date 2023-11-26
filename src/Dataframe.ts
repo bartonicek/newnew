@@ -1,7 +1,7 @@
 import { Key, Lazy, MapFn, ReduceFn, allEntries } from "@abartonicek/utilities";
 import { Accessor } from "solid-js";
 import { Factor } from "./Factor";
-import { SummarizedVariable, Summarizer } from "./Summarizer";
+import { ReducedVariable, Reducer } from "./Summarizer";
 import {
   ConstantVariable,
   NumericVariable,
@@ -15,21 +15,21 @@ import { NormalizeVariables, RowOf, VariableUnwrap, Variables } from "./types";
 type Mapping = "x" | "y" | "size";
 
 type TypeTag = "numeric" | "discrete";
-type Summarizers = Record<string, Summarizer<any, any>>;
-type NormalizeSummarizers<T> = T extends Summarizer<any, any>
+type Reducers = Record<string, Reducer<any, any>>;
+type NormalizeReducers<T> = T extends Reducer<any, any>
   ? T
-  : { [key in keyof T]: NormalizeSummarizers<T[key]> };
+  : { [key in keyof T]: NormalizeReducers<T[key]> };
 
-export class Dataframe<T extends Variables, U extends Summarizers> {
+export class Dataframe<T extends Variables, U extends Reducers> {
   columns: T;
-  summarizers: U;
+  reducers: U;
 
   constructor(columns: T, summarizers?: U) {
     this.columns = { ...columns, ...{ [INDICATOR]: ConstantVariable.of(1) } };
-    this.summarizers = summarizers ?? ({} as U);
+    this.reducers = summarizers ?? ({} as U);
   }
 
-  static of<T extends Variables, U extends Summarizers>(
+  static of<T extends Variables, U extends Reducers>(
     columns: T,
     summarizers?: U
   ) {
@@ -74,14 +74,14 @@ export class Dataframe<T extends Variables, U extends Summarizers> {
     return this.columns[key];
   }
 
-  cols<K extends (keyof T | typeof INDICATOR)[]>(...keys: K) {
+  cols() {
+    return this.columns;
+  }
+
+  pickCols<K extends (keyof T | typeof INDICATOR)[]>(...keys: K) {
     const result = [] as any;
     for (const key of keys) result.push(this.columns[key]);
     return result;
-  }
-
-  allCols() {
-    return this.columns;
   }
 
   encode(key: keyof T, mapping: Mapping) {
@@ -120,12 +120,19 @@ export class Dataframe<T extends Variables, U extends Summarizers> {
     update: ReduceFn<VariableUnwrap<T[K1]>, V>
   ) {
     let { columns } = this;
-    const summarizers: any = this.summarizers ?? {};
+    const summarizers: any = this.reducers ?? {};
     summarizers[newKey] = columns[key].summarize!(initialize, update);
     return Dataframe.of<
       T,
-      NormalizeSummarizers<
-        U & { [key in K2]: Summarizer<VariableUnwrap<T[K1]>, V> }
+      NormalizeReducers<
+        U & {
+          [key in K2]: Reducer<
+            VariableUnwrap<
+              K1 extends keyof T ? T[K1] : ConstantVariable<number>
+            >,
+            V
+          >;
+        }
       >
     >(columns, summarizers);
   }
@@ -148,9 +155,9 @@ export class Dataframe<T extends Variables, U extends Summarizers> {
       const indices = fac.indices();
 
       const n = this.n();
-      const summaries = {} as Record<string, Summarizer<any, any>>;
+      const summaries = {} as Record<string, Reducer<any, any>>;
 
-      for (const [k, s] of Object.entries(this.summarizers ?? {})) {
+      for (const [k, s] of Object.entries(this.reducers ?? {})) {
         summaries[k] = s.initialize(cardinality);
         for (let i = 0; i < n; i++) summaries[k].update(indices[i], i);
       }
@@ -158,14 +165,12 @@ export class Dataframe<T extends Variables, U extends Summarizers> {
       const cols = {} as any;
 
       for (const [k, v] of allEntries(summaries)) cols[k] = v.asVariable();
-      Object.assign(cols, fac.data().allCols());
+      Object.assign(cols, fac.data().cols());
 
       return Dataframe.of<
-        NormalizeVariables<
-          { [key in keyof U]: SummarizedVariable<U[key]> } & V
-        >,
+        NormalizeVariables<{ [key in keyof U]: ReducedVariable<U[key]> } & V>,
         U
-      >(cols, this.summarizers);
+      >(cols, this.reducers);
     };
   }
 
@@ -177,7 +182,7 @@ export class Dataframe<T extends Variables, U extends Summarizers> {
         Dataframe<
           NormalizeVariables<
             {
-              [key in keyof U]: SummarizedVariable<U[key]>;
+              [key in keyof U]: ReducedVariable<U[key]>;
             } & (V[key] extends Accessor<Factor<infer W>> ? W : never)
           >,
           U

@@ -1,10 +1,8 @@
 import {
   allEntries,
   asInt,
-  asString,
   compareAlphaNumeric,
   diff,
-  minMax,
 } from "@abartonicek/utilities";
 import { Dataframe } from "./Dataframe";
 import {
@@ -20,7 +18,7 @@ export class Factor<T extends Variables> {
   constructor(
     private _cardinality: number,
     private _indices: number[],
-    private __data: Dataframe<T, any>
+    private _data: Dataframe<T, any>
   ) {}
 
   cardinality() {
@@ -32,12 +30,17 @@ export class Factor<T extends Variables> {
   }
 
   data() {
-    return this.__data;
+    return this._data;
+  }
+
+  nest<U extends Variables>(other: Factor<U>) {
+    return product(this, other);
   }
 }
 
-export function from(array: string[], labels?: string[]) {
-  if (!labels) labels = Array.from(new Set(array)).map(asString);
+export function from(variable: StringVariable) {
+  const array = variable.values();
+  const labels = Array.from(variable.meta().valueSet) as string[];
   labels.sort(compareAlphaNumeric);
 
   const indices = [] as number[];
@@ -61,8 +64,13 @@ export function from(array: string[], labels?: string[]) {
   return new Factor(labels.length, indices, data);
 }
 
-export function bin(array: number[], width?: number, anchor?: number) {
-  const [min, max] = minMax(array);
+export function bin(
+  variable: NumericVariable,
+  width?: number,
+  anchor?: number
+) {
+  const array = variable.values();
+  const { min, max } = variable.meta() as { min: number; max: number };
 
   const nBins = width ? Math.ceil((max - min) / width) + 1 : 10;
   width = width ?? (max - min) / (nBins - 1);
@@ -172,11 +180,11 @@ export function product<T extends Variables, U extends Variables>(
 
   let cols = {} as any;
 
-  for (const [k, v] of allEntries(factor1.data().allCols())) {
+  for (const [k, v] of allEntries(factor1.data().cols())) {
     cols[k] = ProxyVariable.of(v, Object.values(factor1Map));
   }
 
-  for (let [k, v] of allEntries(factor2.data().allCols())) {
+  for (let [k, v] of allEntries(factor2.data().cols())) {
     if (typeof k === "string") while (k in cols) k += "$";
     cols[k] = ProxyVariable.of(v, Object.values(factor2Map));
   }

@@ -7,16 +7,18 @@ import {
 } from "./Variable";
 import { parseVariable } from "./funs";
 
-export type SummarizedVariable<T extends Summarizer<any, any>> =
-  T extends Summarizer<any, infer U>
-    ? U extends number
-      ? NumericVariable
-      : U extends string
-      ? StringVariable
-      : ReferenceVariable
-    : never;
+export type ReducedVariable<T extends Reducer<any, any>> = T extends Reducer<
+  any,
+  infer U
+>
+  ? U extends number
+    ? NumericVariable
+    : U extends string
+    ? StringVariable
+    : ReferenceVariable
+  : never;
 
-export class Summarizer<T, U> {
+export class Reducer<T, U> {
   private vals: U[];
 
   constructor(
@@ -32,7 +34,7 @@ export class Summarizer<T, U> {
     initialfn: Lazy<U>,
     updatefn: ReduceFn<T, U>
   ) {
-    return new Summarizer(variable, initialfn, updatefn);
+    return new Reducer(variable, initialfn, updatefn);
   }
 
   values() {
