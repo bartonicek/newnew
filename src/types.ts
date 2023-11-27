@@ -1,5 +1,5 @@
 import { Dict, Key } from "@abartonicek/utilities";
-import { Variable } from "./Variable";
+import { Variable } from "./structs/Variable";
 
 export type Variables = Record<Key, Variable<any>>;
 export type VariableUnwrap<T extends Variable<any>> = T extends Variable<

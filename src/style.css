@@ -1,96 +1,115 @@
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
+html,
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+  width: 100%;
+  height: 100%;
 }
 
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  margin: auto;
+  background-color: #deded9;
+  width: 90%;
+  height: 90%;
+  box-shadow: inset 2px 2px 5px #00000025;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vanilla:hover {
-  filter: drop-shadow(0 0 2em #3178c6aa);
+canvas {
+  position: absolute;
+  padding: 0px;
 }
 
-.card {
-  padding: 2em;
+.plotscape-scene {
+  position: relative;
+  display: grid !important;
+  grid-template-columns: repeat(var(--ncols), 1fr);
+  grid-template-rows: repeat(var(--nrows), 1fr);
+  box-sizing: border-box;
+  padding: 20px;
+  padding-bottom: 30px;
+  padding-top: 30px;
+  grid-gap: 20px;
+  overflow: hidden;
 }
 
-.read-the-docs {
-  color: #888;
+.plotscape-plot {
+  background-color: whitesmoke;
+  border: 1px solid #7a7a7a;
+  position: relative;
+  display: inherit !important;
+  box-shadow: 4px 4px 3px #00000025;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+.plotscape-plot.active {
+  outline: 2px solid #7a7a7a;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+.plotscape-query {
+  z-index: 30;
+  position: absolute;
+  width: fit-content;
+  height: fit-content;
+  background-color: white;
+  border: 1px solid #7a7a7a;
+  padding: 1%;
+}
+
+.plotscape-query:empty {
+  opacity: 0%;
+}
+
+.plotscape-under {
+  z-index: 1;
+  background-color: #ededed;
+}
+
+.plotscape-base {
+  z-index: 2;
+  background-color: #fefffe;
+  border-right: 2px solid #fefffe;
+  border-top: 2px solid #fefffe;
+}
+
+.plotscape-1 {
+  z-index: 11;
+}
+
+.plotscape-2 {
+  z-index: 10;
+}
+
+.plotscape-3 {
+  z-index: 9;
+}
+
+.plotscape-4 {
+  z-index: 8;
+}
+
+.plotscape-5 {
+  z-index: 7;
+}
+
+.plotscape-6 {
+  z-index: 6;
+}
+
+.plotscape-7 {
+  z-index: 5;
+}
+
+.plotscape-8 {
+  z-index: 4;
+}
+
+.plotscape-margin {
+  z-index: 19;
+}
+
+.plotscape-user {
+  z-index: 20;
+  border-left: 2px solid #3d3d3d;
+  border-bottom: 2px solid #3d3d3d;
+}
+
+.plotscape-over {
+  z-index: 21;
 }

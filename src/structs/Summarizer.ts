@@ -1,11 +1,14 @@
 import { Lazy, MapFn, ReduceFn } from "@abartonicek/utilities";
+import { isNumericArray, isStringArray } from "../funs";
 import {
+  ProxyVariable,
   ReducedNumericVariable,
+  ReducedReferenceVariable,
+  ReducedStringVariable,
   ReferenceVariable,
   StringVariable,
   Variable,
 } from "./Variable";
-import { parseReducedVariable } from "./funs";
 
 export type ReducedVariable<T extends Reducer<any, any, any>> =
   T extends Reducer<any, infer U, any>
@@ -42,15 +45,6 @@ export class Reducer<T, U, V> {
     return this.vals.map(this.finallyfn);
   }
 
-  asVariable(parent?: Variable<V>, parentIndices?: number[]) {
-    const variable = parseReducedVariable(this.values());
-    if (parent) variable.setParent(parent as any, parentIndices!);
-    variable
-      // @ts-ignore
-      .setReducer?.(this.initialfn, this.updatefn);
-    return variable;
-  }
-
   initialize(cardinality: number) {
     this.vals = [];
     for (let i = 0; i < cardinality; i++) this.vals.push(this.initialfn());
@@ -62,5 +56,19 @@ export class Reducer<T, U, V> {
     const newValue = updatefn(vals[level], variable.valueAt(index));
     vals[level] = newValue;
     return this;
+  }
+
+  parseVariable(parent?: ProxyVariable<unknown>) {
+    const { initialfn, updatefn } = this;
+    const array = this.values();
+
+    const args = [initialfn, updatefn, parent] as const;
+
+    // @ts-ignore
+    if (isNumericArray(array)) return ReducedNumericVariable.of(array, ...args);
+    // @ts-ignore
+    if (isStringArray(array)) return ReducedStringVariable.of(array, ...args);
+    // @ts-ignore
+    else return ReducedReferenceVariable.of(array, ...args);
   }
 }

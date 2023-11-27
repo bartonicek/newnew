@@ -1,16 +1,17 @@
 import { Key, Lazy, MapFn, ReduceFn, allEntries } from "@abartonicek/utilities";
 import { Accessor } from "solid-js";
+import { parseVariable } from "../funs";
+import { INDICATOR } from "../symbols";
+import { NormalizeVariables, RowOf, VariableUnwrap, Variables } from "../types";
 import { Factor } from "./Factor";
 import { ReducedVariable, Reducer } from "./Summarizer";
 import {
   ConstantVariable,
   NumericVariable,
+  ProxyVariable,
   StringVariable,
   Variable,
 } from "./Variable";
-import { parseVariable } from "./funs";
-import { INDICATOR } from "./symbols";
-import { NormalizeVariables, RowOf, VariableUnwrap, Variables } from "./types";
 
 type Mapping = "x" | "y" | "size";
 
@@ -53,8 +54,8 @@ export class Dataframe<T extends Variables, U extends Reducers> {
       if (!Array.isArray(col)) errorParseNotArray(k);
       if (length && col.length != length) errorParseLength(k);
 
-      if (v === "numeric") cols[k] = NumericVariable.of(col).setName(k);
-      if (v === "discrete") cols[k] = StringVariable.of(col).setName(k);
+      if (v === "numeric") cols[k] = NumericVariable.of(col).nameTo(k);
+      if (v === "discrete") cols[k] = StringVariable.of(col).nameTo(k);
     }
 
     return Dataframe.of<
@@ -91,13 +92,15 @@ export class Dataframe<T extends Variables, U extends Reducers> {
   }
 
   encode(key: keyof T, mapping: Mapping) {
-    this.columns[key].setMapping(mapping);
+    this.columns[key].mapTo(mapping);
     return this;
   }
 
   row(index: number, row?: Record<Key, any>) {
     row = row ?? {};
-    for (const [k, v] of allEntries(this.columns)) row[k] = v.valueAt(index);
+    for (const [k, v] of Object.entries(this.columns)) {
+      row[k] = v.valueAt(index);
+    }
     return row as RowOf<T>;
   }
 
@@ -109,6 +112,11 @@ export class Dataframe<T extends Variables, U extends Reducers> {
     return result;
   }
 
+  select<V extends Variables>(selectfn: (variables: T) => V) {
+    const cols = selectfn(this.columns);
+    return Dataframe.of<V, U>(cols);
+  }
+
   mutate<K extends string, V>(key: K, mutatefn: MapFn<RowOf<T>, V>) {
     const array = [] as V[];
     const n = this.n();
@@ -116,7 +124,10 @@ export class Dataframe<T extends Variables, U extends Reducers> {
     const { summarizers, columns: cols } = this as any;
     cols[key] = parseVariable(array);
 
-    return Dataframe.of<T & { [key in K]: Variable<V> }, U>(cols, summarizers);
+    return Dataframe.of<NormalizeVariables<T & { [key in K]: Variable<V> }>, U>(
+      cols,
+      summarizers
+    );
   }
 
   summarize<K1 extends keyof T | typeof INDICATOR, K2 extends string, V, W>(
@@ -178,8 +189,11 @@ export class Dataframe<T extends Variables, U extends Reducers> {
       const parentIndices = fac.parentIndices();
 
       for (const [k, v] of allEntries(summaries)) {
-        cols[k] = v.asVariable(parentData?.col(k), parentIndices);
-        if (parentData) cols[k].setParent(parentData?.col(k), parentIndices);
+        let parentProxy;
+        if (parentData) {
+          parentProxy = ProxyVariable.of(parentData?.col(k), parentIndices!);
+        }
+        cols[k] = v.parseVariable(parentProxy);
       }
 
       Object.assign(cols, fac.data().cols());

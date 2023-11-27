@@ -4,6 +4,8 @@ import {
   compareAlphaNumeric,
   diff,
 } from "@abartonicek/utilities";
+import { PARENT, POSITIONS } from "../symbols";
+import { DisjointUnion, NormalizeVariables, Variables } from "../types";
 import { Dataframe } from "./Dataframe";
 import {
   NumericVariable,
@@ -11,8 +13,6 @@ import {
   ReferenceVariable,
   StringVariable,
 } from "./Variable";
-import { PARENT, POSITIONS } from "./symbols";
-import { DisjointUnion, NormalizeVariables, Variables } from "./types";
 
 export class Factor<T extends Variables> {
   constructor(
@@ -65,7 +65,7 @@ export function from(variable: StringVariable) {
     indices.push(index);
   }
 
-  const cols = { label: StringVariable.of(labels).setName("label") };
+  const cols = { label: StringVariable.of(labels).nameTo("label") };
   Object.assign(cols, {
     [POSITIONS]: ReferenceVariable.of(Object.values(positions)),
   });
@@ -135,8 +135,8 @@ export function bin(
   }
 
   const cols = {
-    bin0: NumericVariable.of(binMin).setName("bin0"),
-    bin1: NumericVariable.of(binMax).setName("bin1"),
+    bin0: NumericVariable.of(binMin).nameTo("bin0"),
+    bin1: NumericVariable.of(binMax).nameTo("bin1"),
     [POSITIONS]: ReferenceVariable.of(Object.values(positions)),
   };
   const data = Dataframe.of(cols);

@@ -1,8 +1,11 @@
-import { Dataframe } from "./Dataframe";
-import { mono } from "./Factor";
+import { Scene } from "./dom/Scene";
 import { add, fetchJSON, zero } from "./funs";
+import { Dataframe } from "./structs/Dataframe";
+import { mono } from "./structs/Factor";
+import { NumericVariable, StringVariable } from "./structs/Variable";
 import "./style.css";
 import { INDICATOR } from "./symbols";
+import { Variables } from "./types";
 
 const mpgJSON = await fetchJSON("./data/mpg.json");
 
@@ -13,6 +16,11 @@ let data = Dataframe.parseColumns(mpgJSON, {
   manufacturer: "discrete",
   model: "discrete",
 });
+
+const app = document.querySelector("#app") as HTMLDivElement;
+const scene = Scene.of(app, data);
+
+const data3 = data.select(({ model }) => ({ var1: model }));
 
 const f0 = () => mono(data.n());
 const f1 = () => f0().nest(data.col("cyl").asFactor());
@@ -39,6 +47,50 @@ const p = partitions[1]();
 console.log(p.rows());
 p.col("stat1").stack();
 console.log(p.rows());
+
+function Barplot<T extends Variables>(
+  scene: Scene<T>,
+  selectfn: (vars: T) => { var1: StringVariable }
+) {
+  const data = scene
+    .data()
+    .select(selectfn)
+    .summarize(INDICATOR, "stat1", zero, add);
+
+  const factor1 = () => data.col("var1").asFactor();
+
+  const partitions = data.makePartitions([factor1]);
+
+  const drawData = () => {
+    const partitionData = partitions[0]();
+    partitionData.col("label").mapTo("x");
+    partitionData.col("stat1").stack().mapTo("y");
+  };
+
+  const borderData = () => {
+    const partitionData = partitions[0]();
+    partitionData.col("label").mapTo("x");
+    partitionData.col("stat1").mapTo("y");
+  };
+
+  const plot = scene.createPlot();
+
+  return plot;
+}
+
+const barplot1 = Barplot(scene, (d) => ({ var1: d.cyl }));
+const barplot2 = Barplot(scene, (d) => ({ var1: d.cyl }));
+const barplot3 = Barplot(scene, (d) => ({ var1: d.cyl }));
+
+const a = Dataframe.of({
+  x: NumericVariable.of([1, 2, 3]),
+  y: NumericVariable.of([2, 3, 4]),
+});
+
+let row = a.row(0);
+row = a.row(1, row);
+
+console.log(row);
 
 // const body = document.querySelector("body")!;
 

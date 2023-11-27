@@ -26,12 +26,12 @@ export class Variable<T> {
     return this._mapping;
   }
 
-  setName(name: string) {
+  nameTo(name: string) {
     this._name = name;
     return this;
   }
 
-  setMapping(mapping: string) {
+  mapTo(mapping: string) {
     this._mapping = mapping;
     return this;
   }
@@ -67,10 +67,6 @@ export class Variable<T> {
     after?: MapFn<U, V>
   ): Reducer<T, U, V> {
     return Reducer.of(this, initialize, update, after);
-  }
-
-  merge<U>(other: Variable<U>) {
-    return ArrayVariable.of([this, other] as const);
   }
 }
 
@@ -183,48 +179,46 @@ export class ArrayVariable<T extends any[]> extends Variable<T> {
     for (const v of this.variables) result.push(v.valueAt(position));
     return result;
   }
-
-  // @ts-ignore
-  merge<U>(other: Variable<U>) {
-    return ArrayVariable.of<[...T, U]>([...this.variables, other] as const);
-  }
 }
 
+// @ts-ignore
 export class ReducedNumericVariable extends NumericVariable {
   parentIndices?: number[];
-  initialfn?: Lazy<number>;
-  updatefn?: ReduceFn<number, number>;
   scalefn?: MapFn<number, number>;
 
-  constructor(public array: number[]) {
+  constructor(
+    public array: number[],
+    public initialfn: Lazy<number>,
+    public updatefn: ReduceFn<number, number>,
+    public parent?: ProxyVariable<number>
+  ) {
     super(array);
   }
 
-  static of(array: number[]) {
-    return new ReducedNumericVariable(array);
-  }
-
-  setReducer(initialfn: Lazy<number>, updatefn: ReduceFn<number, number>) {
-    this.initialfn = initialfn;
-    this.updatefn = updatefn;
-    return this;
+  static of(
+    array: number[],
+    initialfn: Lazy<number>,
+    updatefn: ReduceFn<number, number>,
+    parent?: ProxyVariable<number>
+  ) {
+    return new ReducedNumericVariable(array, initialfn, updatefn, parent);
   }
 
   stack() {
-    if (!this.parent) return;
+    if (!this.parent) return this;
 
     const parentMeta = this.parent.meta();
     this.metadata.setMax(parentMeta.max);
 
     const stackVals = [] as number[];
-    const pInds = this.parent.indices;
+    const parentIndices = this.parent.indices;
 
-    for (let i = 0; i < pInds.length; i++) {
+    for (let i = 0; i < parentIndices.length; i++) {
       stackVals.push(this.initialfn!());
     }
 
     for (let i = 0; i < this.array.length; i++) {
-      const index = pInds[i];
+      const index = parentIndices[i];
       stackVals[index] = this.updatefn!(stackVals[index], this.array[i]);
       this.array[i] = stackVals[index];
     }
@@ -235,5 +229,33 @@ export class ReducedNumericVariable extends NumericVariable {
   scale(scalefn: MapFn<number, number>) {
     if (!this.parent) return;
     this.scalefn = scalefn;
+  }
+}
+
+export class ReducedStringVariable extends StringVariable {
+  parentIndices?: number[];
+  initialfn?: Lazy<string>;
+  updatefn?: ReduceFn<string, string>;
+
+  constructor(public array: string[]) {
+    super(array);
+  }
+
+  static of(array: string[]) {
+    return new ReducedStringVariable(array);
+  }
+}
+
+export class ReducedReferenceVariable extends ReferenceVariable {
+  parentIndices?: number[];
+  initialfn?: Lazy<any>;
+  updatefn?: ReduceFn<any, any>;
+
+  constructor(public array: any[]) {
+    super(array);
+  }
+
+  static of(array: any[]) {
+    return new ReducedStringVariable(array);
   }
 }

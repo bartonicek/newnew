@@ -1,23 +1,24 @@
 import {
   NumericVariable,
-  ReducedNumericVariable,
   ReferenceVariable,
   StringVariable,
-} from "./Variable";
+} from "./structs/Variable";
+
+export function isNumericArray(array: unknown[]): array is number[] {
+  return typeof array[0] === "number";
+}
+
+export function isStringArray(array: unknown[]): array is string[] {
+  return typeof array[0] === "string";
+}
 
 export async function fetchJSON(path: string) {
   return await (await fetch(path)).json();
 }
 
 export function parseVariable(array: any[]) {
-  if (typeof array[0] === "number") return NumericVariable.of(array);
-  if (typeof array[0] === "string") return StringVariable.of(array);
-  return ReferenceVariable.of(array);
-}
-
-export function parseReducedVariable(array: any[]) {
-  if (typeof array[0] === "number") return ReducedNumericVariable.of(array);
-  if (typeof array[0] === "string") return StringVariable.of(array);
+  if (isNumericArray(array)) return NumericVariable.of(array);
+  if (isStringArray(array)) return StringVariable.of(array);
   return ReferenceVariable.of(array);
 }
 
