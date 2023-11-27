@@ -18,7 +18,8 @@ export class Factor<T extends Variables> {
   constructor(
     private _cardinality: number,
     private _indices: number[],
-    private _data: Dataframe<T, any>
+    private _data: Dataframe<T, any>,
+    private _parentIndices?: number[]
   ) {}
 
   cardinality() {
@@ -29,6 +30,10 @@ export class Factor<T extends Variables> {
     return this._indices;
   }
 
+  parentIndices() {
+    return this._parentIndices;
+  }
+
   data() {
     return this._data;
   }
@@ -36,6 +41,12 @@ export class Factor<T extends Variables> {
   nest<U extends Variables>(other: Factor<U>) {
     return product(this, other);
   }
+}
+
+export function mono(n: number) {
+  const indices = [] as number[];
+  for (let i = 0; i < n; i++) indices.push(0);
+  return new Factor(1, indices, Dataframe.of({}));
 }
 
 export function from(variable: StringVariable) {
@@ -137,24 +148,20 @@ export function product<T extends Variables, U extends Variables>(
   factor1: Factor<T>,
   factor2: Factor<U>
 ) {
-  const firstCoarser = factor1.cardinality() < factor2.cardinality();
-  const finer = firstCoarser ? factor2 : factor1;
+  const k = Math.max(factor1.cardinality(), factor2.cardinality()) + 1;
 
-  const k = finer.cardinality() + 1;
-
-  const finerIndices = finer.indices();
   const factor1Indices = factor1.indices();
   const factor2Indices = factor2.indices();
 
   const dirtyIndices = [] as number[];
   const dirtyUniqueIndices = new Set<number>();
 
-  const positionsMap = {} as Record<number, Set<number>>;
-  const parentMap = {} as Record<number, number>;
   const factor1Map = {} as Record<number, number>;
   const factor2Map = {} as Record<number, number>;
+  const parentMap = {} as Record<number, number>;
+  const positionsMap = {} as Record<number, Set<number>>;
 
-  for (let i = 0; i < finerIndices.length; i++) {
+  for (let i = 0; i < factor1Indices.length; i++) {
     const index = k * factor1Indices[i] + factor2Indices[i];
 
     if (!(index in factor1Map)) {
@@ -179,14 +186,15 @@ export function product<T extends Variables, U extends Variables>(
   //
 
   let cols = {} as any;
+  const parentIndices = Object.values(factor1Map);
 
   for (const [k, v] of allEntries(factor1.data().cols())) {
-    cols[k] = ProxyVariable.of(v, Object.values(factor1Map));
+    cols[k] = ProxyVariable.of(v, parentIndices);
   }
 
   for (let [k, v] of allEntries(factor2.data().cols())) {
     if (typeof k === "string") while (k in cols) k += "$";
-    cols[k] = ProxyVariable.of(v, Object.values(factor2Map));
+    cols[k] = ProxyVariable.of(v, parentIndices);
   }
 
   cols[POSITIONS] = ReferenceVariable.of(Object.values(positionsMap));
@@ -195,6 +203,7 @@ export function product<T extends Variables, U extends Variables>(
   return new Factor<NormalizeVariables<DisjointUnion<T, U>>>(
     dirtyUniqueIndices.size,
     indices,
-    Dataframe.of(cols)
+    Dataframe.of(cols),
+    parentIndices
   );
 }

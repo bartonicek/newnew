@@ -26,6 +26,16 @@ export class NumericMetadata implements Metadata<number> {
     return this.vals;
   }
 
+  setMin(value: number) {
+    this.vals.min = value;
+    return this;
+  }
+
+  setMax(value: number) {
+    this.vals.max = value;
+    return this;
+  }
+
   update(value: number) {
     this.vals.min = Math.min(this.vals.min, value);
     this.vals.max = Math.max(this.vals.max, value);

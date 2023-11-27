@@ -1,4 +1,5 @@
 import { Dataframe } from "./Dataframe";
+import { mono } from "./Factor";
 import { add, fetchJSON, zero } from "./funs";
 import "./style.css";
 import { INDICATOR } from "./symbols";
@@ -10,20 +11,35 @@ let data = Dataframe.parseColumns(mpgJSON, {
   displ: "numeric",
   cyl: "discrete",
   manufacturer: "discrete",
+  model: "discrete",
 });
 
-const f1 = () => data.col("cyl").asFactor();
+const f0 = () => mono(data.n());
+const f1 = () => f0().nest(data.col("cyl").asFactor());
 const f2 = () => f1().nest(data.col("manufacturer").asFactor());
 
 const data2 = data
+  .mutate("aux1", ({ hwy, model }) => [hwy, model])
   .summarize(INDICATOR, "stat1", zero, add)
-  .summarize("hwy", "stat2", zero, add);
+  .summarize("hwy", "stat2", zero, add)
+  .summarize(
+    "aux1",
+    "stat3",
+    () => [-Infinity, ""],
+    (prev, next) => {
+      if (prev[0] > next[0]) return prev;
+      return next;
+    },
+    ([_, model]) => model
+  );
 
-const partitions = data2.makePartitions([f1, f2] as const);
-
+const partitions = data2.makePartitions([f0, f1, f2] as const);
 const p = partitions[1]();
 
 console.log(p.rows());
+p.col("stat1").stack();
+console.log(p.rows());
+
 // const body = document.querySelector("body")!;
 
 // const canvas = document.createElement("canvas");

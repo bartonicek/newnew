@@ -15,14 +15,15 @@ import { NormalizeVariables, RowOf, VariableUnwrap, Variables } from "./types";
 type Mapping = "x" | "y" | "size";
 
 type TypeTag = "numeric" | "discrete";
-type Reducers = Record<string, Reducer<any, any>>;
-type NormalizeReducers<T> = T extends Reducer<any, any>
+type Reducers = Record<string, Reducer<any, any, any>>;
+type NormalizeReducers<T> = T extends Reducer<any, any, any>
   ? T
   : { [key in keyof T]: NormalizeReducers<T[key]> };
 
 export class Dataframe<T extends Variables, U extends Reducers> {
   columns: T;
   reducers: U;
+  parent?: Dataframe<any, any>;
 
   constructor(columns: T, summarizers?: U) {
     this.columns = { ...columns, ...{ [INDICATOR]: ConstantVariable.of(1) } };
@@ -64,6 +65,11 @@ export class Dataframe<T extends Variables, U extends Reducers> {
       },
       {}
     >(cols);
+  }
+
+  setParent(parent?: Dataframe<any, any>) {
+    this.parent = parent;
+    return this;
   }
 
   n() {
@@ -113,15 +119,16 @@ export class Dataframe<T extends Variables, U extends Reducers> {
     return Dataframe.of<T & { [key in K]: Variable<V> }, U>(cols, summarizers);
   }
 
-  summarize<K1 extends keyof T | typeof INDICATOR, K2 extends string, V>(
+  summarize<K1 extends keyof T | typeof INDICATOR, K2 extends string, V, W>(
     key: K1,
     newKey: K2,
     initialize: Lazy<V>,
-    update: ReduceFn<VariableUnwrap<T[K1]>, V>
+    update: ReduceFn<VariableUnwrap<T[K1]>, V>,
+    after?: MapFn<V, W>
   ) {
     let { columns } = this;
     const summarizers: any = this.reducers ?? {};
-    summarizers[newKey] = columns[key].summarize!(initialize, update);
+    summarizers[newKey] = columns[key].summarize!(initialize, update, after);
     return Dataframe.of<
       T,
       NormalizeReducers<
@@ -130,7 +137,8 @@ export class Dataframe<T extends Variables, U extends Reducers> {
             VariableUnwrap<
               K1 extends keyof T ? T[K1] : ConstantVariable<number>
             >,
-            V
+            V,
+            W
           >;
         }
       >
@@ -147,24 +155,33 @@ export class Dataframe<T extends Variables, U extends Reducers> {
     return row as { [key in keyof T]: VariableUnwrap<T[key]> };
   }
 
-  partitionBy<V extends Variables>(factor: Accessor<Factor<V>>) {
+  partitionBy<V extends Variables>(
+    factor: Accessor<Factor<V>>,
+    parent?: Accessor<Dataframe<any, any>>
+  ) {
     return () => {
       const fac = factor();
+      const parentData = parent?.();
 
       const cardinality = fac.cardinality();
       const indices = fac.indices();
 
       const n = this.n();
-      const summaries = {} as Record<string, Reducer<any, any>>;
+      const summaries = {} as Record<string, Reducer<any, any, any>>;
 
-      for (const [k, s] of Object.entries(this.reducers ?? {})) {
-        summaries[k] = s.initialize(cardinality);
+      for (const [k, r] of Object.entries(this.reducers ?? {})) {
+        summaries[k] = r.initialize(cardinality);
         for (let i = 0; i < n; i++) summaries[k].update(indices[i], i);
       }
 
       const cols = {} as any;
+      const parentIndices = fac.parentIndices();
 
-      for (const [k, v] of allEntries(summaries)) cols[k] = v.asVariable();
+      for (const [k, v] of allEntries(summaries)) {
+        cols[k] = v.asVariable(parentData?.col(k), parentIndices);
+        if (parentData) cols[k].setParent(parentData?.col(k), parentIndices);
+      }
+
       Object.assign(cols, fac.data().cols());
 
       return Dataframe.of<
@@ -176,7 +193,14 @@ export class Dataframe<T extends Variables, U extends Reducers> {
 
   makePartitions<V extends readonly Accessor<Factor<any>>[]>(factors: V) {
     const result = [] as any;
-    for (const factor of factors) result.push(this.partitionBy(factor));
+    let parent = undefined as Accessor<Dataframe<any, any>> | undefined;
+
+    for (const factor of factors) {
+      const getter = this.partitionBy(factor, parent);
+      result.push(getter);
+      parent = getter;
+    }
+
     return result as {
       [key in keyof V]: Accessor<
         Dataframe<

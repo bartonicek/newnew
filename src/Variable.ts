@@ -1,4 +1,4 @@
-import { Lazy, ReduceFn, asString } from "@abartonicek/utilities";
+import { Lazy, MapFn, ReduceFn, asString } from "@abartonicek/utilities";
 import { from } from "./Factor";
 import {
   Metadata,
@@ -11,6 +11,7 @@ import { Reducer } from "./Summarizer";
 export class Variable<T> {
   private _name?: string;
   private _mapping?: string;
+  parent?: ProxyVariable<T>;
   metadata: Metadata<T>;
 
   constructor(public array: T[]) {
@@ -35,6 +36,11 @@ export class Variable<T> {
     return this;
   }
 
+  setParent(other: Variable<T>, indices: number[]) {
+    this.parent = ProxyVariable.of(other, indices);
+    return this;
+  }
+
   n() {
     return this.array.length;
   }
@@ -55,8 +61,16 @@ export class Variable<T> {
     return this.array[position];
   }
 
-  summarize<U>(initialize: Lazy<U>, update: ReduceFn<T, U>): Reducer<T, U> {
-    return Reducer.of(this, initialize, update);
+  summarize<U, V>(
+    initialize: Lazy<U>,
+    update: ReduceFn<T, U>,
+    after?: MapFn<U, V>
+  ): Reducer<T, U, V> {
+    return Reducer.of(this, initialize, update, after);
+  }
+
+  merge<U>(other: Variable<U>) {
+    return ArrayVariable.of([this, other] as const);
   }
 }
 
@@ -102,7 +116,7 @@ export class ReferenceVariable extends Variable<any> {
 }
 
 export class ProxyVariable<T> extends Variable<T> {
-  constructor(private variable: Variable<T>, private indices: number[]) {
+  constructor(private variable: Variable<T>, public indices: number[]) {
     super(variable.array);
   }
 
@@ -116,6 +130,13 @@ export class ProxyVariable<T> extends Variable<T> {
 
   meta() {
     return this.variable.meta();
+  }
+
+  values() {
+    const n = this.n();
+    const result = [] as T[];
+    for (let i = 0; i < n; i++) result.push(this.valueAt(i));
+    return result;
   }
 
   valueAt(position: number) {
@@ -161,5 +182,58 @@ export class ArrayVariable<T extends any[]> extends Variable<T> {
     const result = [] as unknown as T;
     for (const v of this.variables) result.push(v.valueAt(position));
     return result;
+  }
+
+  // @ts-ignore
+  merge<U>(other: Variable<U>) {
+    return ArrayVariable.of<[...T, U]>([...this.variables, other] as const);
+  }
+}
+
+export class ReducedNumericVariable extends NumericVariable {
+  parentIndices?: number[];
+  initialfn?: Lazy<number>;
+  updatefn?: ReduceFn<number, number>;
+  scalefn?: MapFn<number, number>;
+
+  constructor(public array: number[]) {
+    super(array);
+  }
+
+  static of(array: number[]) {
+    return new ReducedNumericVariable(array);
+  }
+
+  setReducer(initialfn: Lazy<number>, updatefn: ReduceFn<number, number>) {
+    this.initialfn = initialfn;
+    this.updatefn = updatefn;
+    return this;
+  }
+
+  stack() {
+    if (!this.parent) return;
+
+    const parentMeta = this.parent.meta();
+    this.metadata.setMax(parentMeta.max);
+
+    const stackVals = [] as number[];
+    const pInds = this.parent.indices;
+
+    for (let i = 0; i < pInds.length; i++) {
+      stackVals.push(this.initialfn!());
+    }
+
+    for (let i = 0; i < this.array.length; i++) {
+      const index = pInds[i];
+      stackVals[index] = this.updatefn!(stackVals[index], this.array[i]);
+      this.array[i] = stackVals[index];
+    }
+
+    return this;
+  }
+
+  scale(scalefn: MapFn<number, number>) {
+    if (!this.parent) return;
+    this.scalefn = scalefn;
   }
 }
