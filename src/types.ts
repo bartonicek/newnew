@@ -1,5 +1,10 @@
 import { Dict, Key } from "@abartonicek/utilities";
-import { Variable } from "./structs/Variable";
+import {
+  NumericVariable,
+  ReferenceVariable,
+  StringVariable,
+  Variable,
+} from "./structs/Variable";
 
 export type Variables = Record<Key, Variable<any>>;
 export type VariableUnwrap<T extends Variable<any>> = T extends Variable<
@@ -8,9 +13,13 @@ export type VariableUnwrap<T extends Variable<any>> = T extends Variable<
   ? U
   : never;
 
-export type NormalizeVariables<T> = T extends Variable<any>
-  ? T
-  : { [key in keyof T]: NormalizeVariables<T[key]> };
+export type ParseVariable<T> = T extends number
+  ? NumericVariable
+  : T extends string
+  ? StringVariable
+  : ReferenceVariable<T>;
+
+export type Normalize<T> = { [key in keyof T]: T[key] } & {};
 
 export type DisjointUnion<
   T extends Record<Key, any>,

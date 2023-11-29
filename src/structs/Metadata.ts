@@ -1,78 +1,72 @@
-import { minMax } from "@abartonicek/utilities";
+import { compareAlphaNumeric, minMax } from "@abartonicek/utilities";
 
 export type Metadata<T> = {
   update(value: T): void;
   empty(): void;
-  values(): Record<string, any>;
 };
 
 export class NumericMetadata implements Metadata<number> {
-  constructor(private vals: { min: number; max: number }) {}
+  constructor(public min: number, public max: number) {}
 
-  static of(vals: { min: number; max: number }) {
-    return new NumericMetadata(vals);
+  static of(min: number, max: number) {
+    return new NumericMetadata(min, max);
   }
 
   static default() {
-    return NumericMetadata.of({ min: -Infinity, max: Infinity });
+    return NumericMetadata.of(-Infinity, Infinity);
   }
 
   static from(array: number[]) {
     const [min, max] = minMax(array);
-    return NumericMetadata.of({ min, max });
-  }
-
-  values() {
-    return this.vals;
+    return NumericMetadata.of(min, max);
   }
 
   setMin(value: number) {
-    this.vals.min = value;
+    this.min = value;
     return this;
   }
 
   setMax(value: number) {
-    this.vals.max = value;
+    this.max = value;
     return this;
   }
 
   update(value: number) {
-    this.vals.min = Math.min(this.vals.min, value);
-    this.vals.max = Math.max(this.vals.max, value);
+    this.min = Math.min(this.min, value);
+    this.max = Math.max(this.max, value);
   }
 
   empty() {
-    this.vals.min = -Infinity;
-    this.vals.max = Infinity;
+    this.min = -Infinity;
+    this.max = Infinity;
   }
 }
 
 export class StringMetadata implements Metadata<string> {
-  constructor(private vals: { valueSet: Set<string> }) {}
+  constructor(public values: string[], public sort: boolean) {}
 
-  static of(vals: { valueSet: Set<string> }) {
-    return new StringMetadata(vals);
+  static of(values: string[], sort = true) {
+    return new StringMetadata(values, sort);
   }
 
   static default() {
-    return StringMetadata.of({ valueSet: new Set() });
+    return StringMetadata.of([]);
   }
 
-  static from(array: string[]) {
-    const valueSet = new Set(array);
-    return StringMetadata.of({ valueSet });
-  }
-
-  values() {
-    return this.vals;
+  static from(array: string[], sort = true) {
+    array = Array.from(new Set(array));
+    if (sort) array.sort();
+    return StringMetadata.of(array, sort);
   }
 
   update(value: string) {
-    this.vals.valueSet.add(value);
+    if (this.values.indexOf(value) === -1) return;
+    this.values.push(value);
+    if (this.sort) this.values.sort(compareAlphaNumeric);
   }
 
   empty() {
-    this.vals.valueSet = new Set();
+    this.values = [];
   }
 }
 

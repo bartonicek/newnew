@@ -1,8 +1,15 @@
-import { Key, Lazy, MapFn, ReduceFn, allEntries } from "@abartonicek/utilities";
+import {
+  Key,
+  Lazy,
+  MapFn,
+  ReduceFn,
+  allEntries,
+  allValues,
+} from "@abartonicek/utilities";
 import { Accessor } from "solid-js";
 import { parseVariable } from "../funs";
 import { INDICATOR } from "../symbols";
-import { NormalizeVariables, RowOf, VariableUnwrap, Variables } from "../types";
+import { Normalize, RowOf, VariableUnwrap, Variables } from "../types";
 import { Factor } from "./Factor";
 import { ReducedVariable, Reducer } from "./Summarizer";
 import {
@@ -24,6 +31,8 @@ type NormalizeReducers<T> = T extends Reducer<any, any, any>
 export class Dataframe<T extends Variables, U extends Reducers> {
   columns: T;
   reducers: U;
+
+  nVariable?: Variable<any>;
   parent?: Dataframe<any, any>;
 
   constructor(columns: T, summarizers?: U) {
@@ -54,8 +63,8 @@ export class Dataframe<T extends Variables, U extends Reducers> {
       if (!Array.isArray(col)) errorParseNotArray(k);
       if (length && col.length != length) errorParseLength(k);
 
-      if (v === "numeric") cols[k] = NumericVariable.of(col).nameTo(k);
-      if (v === "discrete") cols[k] = StringVariable.of(col).nameTo(k);
+      if (v === "numeric") cols[k] = NumericVariable.of(col).setName(k);
+      if (v === "discrete") cols[k] = StringVariable.of(col).setName(k);
     }
 
     return Dataframe.of<
@@ -74,7 +83,12 @@ export class Dataframe<T extends Variables, U extends Reducers> {
   }
 
   n() {
-    return Object.values(this.columns)[0].n();
+    if (this.nVariable) return this.nVariable.n()!;
+    for (const col of allValues(this.columns)) {
+      if (col.n()) this.nVariable = col;
+    }
+    if (!this.nVariable) errorN();
+    return this.nVariable!.n()!;
   }
 
   col<K extends keyof T | typeof INDICATOR>(key: K) {
@@ -92,16 +106,42 @@ export class Dataframe<T extends Variables, U extends Reducers> {
   }
 
   encode(key: keyof T, mapping: Mapping) {
-    this.columns[key].mapTo(mapping);
+    this.columns[key].setMapping(mapping);
+    return this;
+  }
+
+  stack(key: keyof T & keyof U) {
+    // @ts-ignore
+    this.columns[key].stack();
     return this;
   }
 
   row(index: number, row?: Record<Key, any>) {
     row = row ?? {};
-    for (const [k, v] of Object.entries(this.columns)) {
+    for (const [k, v] of allEntries(this.columns)) {
       row[k] = v.valueAt(index);
     }
     return row as RowOf<T>;
+  }
+
+  namedRow(index: number, row?: Record<Key, any>) {
+    row = row ?? {};
+    for (const [_, col] of allEntries(this.columns)) {
+      let name = col.name() ?? `unnamed`;
+      while (name in row) name += `$`;
+      row[name] = col.valueAt(index);
+    }
+    return row;
+  }
+
+  mappingRow(index: number, row?: Record<Key, any>) {
+    row = row ?? {};
+    for (const [_, col] of allEntries(this.columns)) {
+      let mapping = col.mapping();
+      if (!mapping) continue;
+      row[mapping] = col.scaledAt?.(index);
+    }
+    return row;
   }
 
   rows() {
@@ -117,6 +157,20 @@ export class Dataframe<T extends Variables, U extends Reducers> {
     return Dataframe.of<V, U>(cols);
   }
 
+  select2<V extends Record<string, keyof T>>(spec: V) {
+    const cols = {} as any;
+    for (const [k, v] of Object.entries(spec)) {
+      cols[k] = this.columns[v];
+    }
+    return Dataframe.of<{ [key in keyof V]: T[V[key]] }, {}>(cols);
+  }
+
+  merge<V extends Variables, W extends Reducers>(other: Dataframe<V, W>) {
+    const cols = { ...this.columns, ...other.columns };
+    const reducers = { ...this.reducers, ...other.reducers };
+    return Dataframe.of<Normalize<T & V>, Normalize<U & W>>(cols, reducers);
+  }
+
   mutate<K extends string, V>(key: K, mutatefn: MapFn<RowOf<T>, V>) {
     const array = [] as V[];
     const n = this.n();
@@ -124,7 +178,7 @@ export class Dataframe<T extends Variables, U extends Reducers> {
     const { summarizers, columns: cols } = this as any;
     cols[key] = parseVariable(array);
 
-    return Dataframe.of<NormalizeVariables<T & { [key in K]: Variable<V> }>, U>(
+    return Dataframe.of<Normalize<T & { [key in K]: Variable<V> }>, U>(
       cols,
       summarizers
     );
@@ -142,7 +196,7 @@ export class Dataframe<T extends Variables, U extends Reducers> {
     summarizers[newKey] = columns[key].summarize!(initialize, update, after);
     return Dataframe.of<
       T,
-      NormalizeReducers<
+      Normalize<
         U & {
           [key in K2]: Reducer<
             VariableUnwrap<
@@ -154,16 +208,6 @@ export class Dataframe<T extends Variables, U extends Reducers> {
         }
       >
     >(columns, summarizers);
-  }
-
-  namedRow(index: number, row?: Record<Key, any>) {
-    row = row ?? {};
-    for (const [_, col] of allEntries(this.columns)) {
-      let name = col.name() ?? `unnamed`;
-      while (name in row) name += `$`;
-      row[name] = col.valueAt(index);
-    }
-    return row as { [key in keyof T]: VariableUnwrap<T[key]> };
   }
 
   partitionBy<V extends Variables>(
@@ -199,7 +243,7 @@ export class Dataframe<T extends Variables, U extends Reducers> {
       Object.assign(cols, fac.data().cols());
 
       return Dataframe.of<
-        NormalizeVariables<{ [key in keyof U]: ReducedVariable<U[key]> } & V>,
+        Normalize<{ [key in keyof U]: ReducedVariable<U[key]> } & V>,
         U
       >(cols, this.reducers);
     };
@@ -218,7 +262,7 @@ export class Dataframe<T extends Variables, U extends Reducers> {
     return result as {
       [key in keyof V]: Accessor<
         Dataframe<
-          NormalizeVariables<
+          Normalize<
             {
               [key in keyof U]: ReducedVariable<U[key]>;
             } & (V[key] extends Accessor<Factor<infer W>> ? W : never)
@@ -238,4 +282,8 @@ function errorParseLength(key: string) {
   throw new Error(
     `Column ${key} has different length from previously seen columns`
   );
+}
+
+function errorN() {
+  throw new Error(`No variable with length in dataframe.`);
 }

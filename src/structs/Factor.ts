@@ -1,11 +1,6 @@
-import {
-  allEntries,
-  asInt,
-  compareAlphaNumeric,
-  diff,
-} from "@abartonicek/utilities";
+import { allEntries, asInt, diff } from "@abartonicek/utilities";
 import { PARENT, POSITIONS } from "../symbols";
-import { DisjointUnion, NormalizeVariables, Variables } from "../types";
+import { DisjointUnion, Normalize, Variables } from "../types";
 import { Dataframe } from "./Dataframe";
 import {
   NumericVariable,
@@ -21,6 +16,15 @@ export class Factor<T extends Variables> {
     private _data: Dataframe<T, any>,
     private _parentIndices?: number[]
   ) {}
+
+  static of<T extends Variables>(
+    _cardinality: number,
+    _indices: number[],
+    _data: Dataframe<T, any>,
+    _parentIndices?: number[]
+  ) {
+    return new Factor(_cardinality, _indices, _data, _parentIndices);
+  }
 
   cardinality() {
     return this._cardinality;
@@ -51,8 +55,7 @@ export function mono(n: number) {
 
 export function from(variable: StringVariable) {
   const array = variable.values();
-  const labels = Array.from(variable.meta().valueSet) as string[];
-  labels.sort(compareAlphaNumeric);
+  const labels = Array.from(variable.metadata.values);
 
   const indices = [] as number[];
   const positions = {} as Record<number, Set<number>>;
@@ -65,7 +68,7 @@ export function from(variable: StringVariable) {
     indices.push(index);
   }
 
-  const cols = { label: StringVariable.of(labels).nameTo("label") };
+  const cols = { label: StringVariable.of(labels).setName("label") };
   Object.assign(cols, {
     [POSITIONS]: ReferenceVariable.of(Object.values(positions)),
   });
@@ -81,7 +84,7 @@ export function bin(
   anchor?: number
 ) {
   const array = variable.values();
-  const { min, max } = variable.meta() as { min: number; max: number };
+  const { min, max } = variable.metadata;
 
   const nBins = width ? Math.ceil((max - min) / width) + 1 : 10;
   width = width ?? (max - min) / (nBins - 1);
@@ -135,8 +138,8 @@ export function bin(
   }
 
   const cols = {
-    bin0: NumericVariable.of(binMin).nameTo("bin0"),
-    bin1: NumericVariable.of(binMax).nameTo("bin1"),
+    bin0: NumericVariable.of(binMin).setName("bin0"),
+    bin1: NumericVariable.of(binMax).setName("bin1"),
     [POSITIONS]: ReferenceVariable.of(Object.values(positions)),
   };
   const data = Dataframe.of(cols);
@@ -194,13 +197,13 @@ export function product<T extends Variables, U extends Variables>(
 
   for (let [k, v] of allEntries(factor2.data().cols())) {
     if (typeof k === "string") while (k in cols) k += "$";
-    cols[k] = ProxyVariable.of(v, parentIndices);
+    cols[k] = ProxyVariable.of(v, Object.values(factor2Map));
   }
 
   cols[POSITIONS] = ReferenceVariable.of(Object.values(positionsMap));
-  cols[PARENT] = ReferenceVariable.of(Object.values(parentMap));
+  cols[PARENT] = ReferenceVariable.of(parentIndices);
 
-  return new Factor<NormalizeVariables<DisjointUnion<T, U>>>(
+  return new Factor<Normalize<DisjointUnion<T, U>>>(
     dirtyUniqueIndices.size,
     indices,
     Dataframe.of(cols),

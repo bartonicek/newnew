@@ -1,6 +1,8 @@
+import { Marker } from "../Marker";
 import { Dataframe } from "../structs/Dataframe";
 import { Variables } from "../types";
 import { Plot } from "./Plot";
+import { makeSceneStore } from "./makeSceneStore";
 
 export class Scene<T extends Variables> {
   private plots: Plot[];
@@ -8,6 +10,9 @@ export class Scene<T extends Variables> {
   private nPlots: number;
   private nRows: number;
   private nCols: number;
+
+  public store: ReturnType<typeof makeSceneStore>;
+  public marker: Marker;
 
   constructor(
     public container: HTMLDivElement,
@@ -19,6 +24,9 @@ export class Scene<T extends Variables> {
     this.nPlots = 0;
     this.nRows = 0;
     this.nCols = 0;
+
+    this.store = makeSceneStore();
+    this.marker = Marker.of(_data.n(), this.store.group, this.store.selected);
   }
 
   static of<T extends Variables>(

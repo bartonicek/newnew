@@ -4,56 +4,41 @@ export type ScaleLike<T> = {
 };
 
 export class ScaleContinuous implements ScaleLike<number> {
-  constructor(private lower: number, private upper: number) {}
+  constructor(private metadata: { min: number; max: number }) {}
 
-  static of(lower: number, upper: number) {
-    return new ScaleContinuous(lower, upper);
-  }
-
-  setLower(value: number) {
-    this.lower = value;
-    return this;
-  }
-
-  setUpper(value: number) {
-    this.upper = value;
-    return this;
+  static of(metadata: { min: number; max: number }) {
+    return new ScaleContinuous(metadata);
   }
 
   range() {
-    return this.upper - this.lower;
+    return this.metadata.max - this.metadata.min;
   }
 
-  normalize(value: number): number {
-    return (value - this.lower) / this.range();
+  normalize(value: number) {
+    return (value - this.metadata.min) / this.range();
   }
 
   unnormalize(value: number): number {
-    return this.lower + value * this.range();
+    return this.metadata.min + value * this.range();
   }
 }
 
 export class ScaleDiscrete implements ScaleLike<string> {
-  constructor(private values: string[]) {}
+  constructor(private metadata: { values: string[] }) {}
 
-  static of(values: string[]) {
-    return new ScaleDiscrete(values);
+  static of(metadata: { values: string[] }) {
+    return new ScaleDiscrete(metadata);
   }
 
-  setValues(values: string[]) {
-    this.values = values;
-    return this;
+  normalize(value: string) {
+    const index = this.metadata.values.indexOf(value);
+    if (index === -1) return NaN;
+    return (index + 1) / (this.metadata.values.length + 1);
   }
 
-  level(value: string) {
-    return this.values.indexOf(value);
-  }
-
-  normalize(value: string): number {
-    return (this.level(value) + 1) / (this.values.length + 1);
-  }
-
-  unnormalize(value: number): string {
-    return this.values[Math.round(value * (this.values.length + 1)) - 1];
+  unnormalize(value: number) {
+    return this.metadata.values[
+      Math.round(value * (this.metadata.values.length + 1)) - 1
+    ];
   }
 }

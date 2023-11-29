@@ -1,8 +1,14 @@
+import { createRoot } from "solid-js";
+import { Representer } from "./Representer";
 import { Scene } from "./dom/Scene";
 import { add, fetchJSON, zero } from "./funs";
 import { Dataframe } from "./structs/Dataframe";
-import { mono } from "./structs/Factor";
-import { NumericVariable, StringVariable } from "./structs/Variable";
+import {
+  ArrayVariable,
+  ConstantVariable,
+  NumericVariable,
+  StringVariable,
+} from "./structs/Variable";
 import "./style.css";
 import { INDICATOR } from "./symbols";
 import { Variables } from "./types";
@@ -17,36 +23,10 @@ let data = Dataframe.parseColumns(mpgJSON, {
   model: "discrete",
 });
 
-const app = document.querySelector("#app") as HTMLDivElement;
-const scene = Scene.of(app, data);
-
-const data3 = data.select(({ model }) => ({ var1: model }));
-
-const f0 = () => mono(data.n());
-const f1 = () => f0().nest(data.col("cyl").asFactor());
-const f2 = () => f1().nest(data.col("manufacturer").asFactor());
-
-const data2 = data
-  .mutate("aux1", ({ hwy, model }) => [hwy, model])
-  .summarize(INDICATOR, "stat1", zero, add)
-  .summarize("hwy", "stat2", zero, add)
-  .summarize(
-    "aux1",
-    "stat3",
-    () => [-Infinity, ""],
-    (prev, next) => {
-      if (prev[0] > next[0]) return prev;
-      return next;
-    },
-    ([_, model]) => model
-  );
-
-const partitions = data2.makePartitions([f0, f1, f2] as const);
-const p = partitions[1]();
-
-console.log(p.rows());
-p.col("stat1").stack();
-console.log(p.rows());
+const data22 = data.select((d) => ({
+  x: ConstantVariable.of([d.cyl, d.displ, d.hwy].map((x) => x.name())),
+  y: ArrayVariable.of([d.cyl, d.displ, d.hwy] as const),
+}));
 
 function Barplot<T extends Variables>(
   scene: Scene<T>,
@@ -58,39 +38,59 @@ function Barplot<T extends Variables>(
     .summarize(INDICATOR, "stat1", zero, add);
 
   const factor1 = () => data.col("var1").asFactor();
+  const factor2 = () => factor1().nest(scene.marker.asFactor());
 
-  const partitions = data.makePartitions([factor1]);
+  const ps = data.makePartitions([factor1, factor2] as const);
 
-  const drawData = () => {
-    const partitionData = partitions[0]();
-    partitionData.col("label").mapTo("x");
-    partitionData.col("stat1").stack().mapTo("y");
-  };
+  const boundaryData = () => ps[0]().encode("label", "x").encode("stat1", "y");
+  const drawData = () =>
+    ps[1]().encode("label", "x").encode("stat1", "y").stack("stat1");
 
-  const borderData = () => {
-    const partitionData = partitions[0]();
-    partitionData.col("label").mapTo("x");
-    partitionData.col("stat1").mapTo("y");
-  };
+  const representer = Representer.of(drawData, boundaryData, 0 as any);
 
   const plot = scene.createPlot();
 
   return plot;
 }
 
-const barplot1 = Barplot(scene, (d) => ({ var1: d.cyl }));
-const barplot2 = Barplot(scene, (d) => ({ var1: d.cyl }));
-const barplot3 = Barplot(scene, (d) => ({ var1: d.cyl }));
+function Scatterplot<T extends Variables>(
+  scene: Scene<T>,
+  selectfn: (vars: T) => { var1: NumericVariable; var2: NumericVariable }
+) {
+  const { marker } = scene;
+  const data = scene
+    .data()
+    .select(selectfn)
+    .encode("var1", "x")
+    .encode("var2", "y");
 
-const a = Dataframe.of({
-  x: NumericVariable.of([1, 2, 3]),
-  y: NumericVariable.of([2, 3, 4]),
+  const data2 = () => data.merge(marker.proxyData());
+  const representer = Representer.of(data2, data2, {});
+
+  const plot = scene.createPlot();
+
+  return plot;
+}
+
+createRoot(() => {
+  const app = document.querySelector("#app") as HTMLDivElement;
+  const scene = Scene.of(app, data);
+
+  const barplot1 = Barplot(scene, (d) => ({ var1: d.cyl }));
+  const scatterplot1 = Scatterplot(scene, (d) => ({
+    var1: d.hwy,
+    var2: d.displ,
+  }));
 });
 
-let row = a.row(0);
-row = a.row(1, row);
+//   x: NumericVariable.of([1, 2, 3]),
+//   y: NumericVariable.of([2, 3, 4]),
+// });
 
-console.log(row);
+// let row = a.row(0);
+// row = a.row(1, row);
+
+// console.log(row);
 
 // const body = document.querySelector("body")!;
 

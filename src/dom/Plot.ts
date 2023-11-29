@@ -1,20 +1,18 @@
 import { asInt } from "@abartonicek/utilities";
-import { createEffect } from "solid-js";
 import html from "solid-js/html";
+import { Context } from "./Context";
 import { Scene } from "./Scene";
 import { makePlotStore } from "./makePlotStore";
 
 export const groupContexts = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 export const contexts = ["base", "user", "over", ...groupContexts] as const;
-
-export type Context = (typeof contexts)[number];
-export type Contexts = Record<Context, CanvasRenderingContext2D>;
+export type ContextName = (typeof contexts)[number];
 
 export class Plot {
   id: Symbol;
   store: ReturnType<typeof makePlotStore>;
   container: HTMLDivElement;
-  contexts: Contexts;
+  contexts: Record<ContextName, Context>;
 
   constructor(private scene: Scene<any>) {
     this.id = Symbol();
@@ -24,7 +22,7 @@ export class Plot {
 
     this.store = makePlotStore();
 
-    this.contexts = {} as Contexts;
+    this.contexts = {} as Record<ContextName, Context>;
     for (const k of contexts) this.contexts[k] = makeContext(this, k);
 
     this.container.addEventListener("click", this.onClick);
@@ -47,7 +45,6 @@ export class Plot {
   };
 
   onResize = () => {
-    console.log("resize");
     const { setWidth, setHeight } = this.store;
     setWidth(asInt(getComputedStyle(this.container).width));
     setHeight(asInt(getComputedStyle(this.container).height));
@@ -62,31 +59,20 @@ export class Plot {
   };
 }
 
-function makeContext(plot: Plot, contextName: Context) {
-  const canvas = html`<canvas />` as HTMLCanvasElement;
-  canvas.classList.add(`plotscape-${contextName}`);
-  plot.container.appendChild(canvas);
+function makeContext(plot: Plot, contextName: ContextName) {
+  const { store, container } = plot;
   const inner = contextName !== "over";
+  const width = inner ? store.innerWidth : store.width;
+  const height = inner ? store.innerHeight : store.height;
+
+  const context = Context.of(width, height)
+    .appendTo(container)
+    .addClass(`plotscape-${contextName}`);
 
   if (inner) {
-    canvas.style.marginLeft = plot.store.marginLeft() + "px";
-    canvas.style.marginTop = plot.store.marginTop() + "px";
+    context.setStyle("marginLeft", store.marginLeft() + `px`);
+    context.setStyle("marginTop", store.marginTop() + `px`);
   }
-
-  const context = canvas.getContext("2d")!;
-
-  const width = inner ? plot.store.innerWidth : plot.store.width;
-  const height = inner ? plot.store.innerHeight : plot.store.height;
-  const scalingFactor = 3;
-
-  createEffect(() => {
-    const [w, h] = [width(), height()];
-    canvas.style.width = w + `px`;
-    canvas.style.height = h + `px`;
-    canvas.width = Math.ceil(w * scalingFactor);
-    canvas.height = Math.ceil(h * scalingFactor);
-    context.scale(scalingFactor, scalingFactor);
-  });
 
   return context;
 }
